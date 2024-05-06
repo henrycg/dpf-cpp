@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cassert>
 #include <stdio.h>
+#include <sys/random.h>
 
 namespace DPF {
     namespace prg {
@@ -65,7 +66,10 @@ namespace DPF {
         assert(logn <= 63);
         assert(alpha < (1ull << logn));
         std::vector<uint8_t> ka, kb, CW;
-        PRNG p = PRNG::getTestPRNG();
+
+        reg_arr_union seed;
+        assert(16 == getrandom(seed.arr, 16, 0));
+        PRNG p = PRNG(seed.reg, 16);
         block s0, s1;
         uint8_t t0, t1;
         p.get((uint8_t *) &s0, sizeof(s0));
@@ -340,3 +344,22 @@ namespace DPF {
         return data;
     }
 }
+
+void GoGen(uint8_t *keyA, uint8_t *keyB, size_t bufsize, size_t* len,  size_t alpha, size_t logn, uint8_t *beta_in) {
+  std::array<uint8_t,32> beta;
+  memcpy(&beta[0], beta_in, 32);
+  auto keys = DPF::Gen(alpha, logn, beta);
+
+  assert(keys.first.size() <= bufsize);
+  memcpy(keyA, keys.first.data(), keys.first.size());
+  memcpy(keyB, keys.second.data(), keys.second.size());
+  *len = keys.first.size();
+}
+
+void GoEval(uint8_t *out, uint8_t *key_in, size_t keysize, size_t logn) {
+  std::vector<uint8_t> key(key_in, key_in + keysize);
+
+  auto arr = DPF::EvalFull8(key, logn);
+  memcpy(out, arr.data(), arr.size());
+}
+
