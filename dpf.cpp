@@ -5,6 +5,7 @@
 #include "Log.h"
 #include <iostream>
 #include <cassert>
+#include <stdio.h>
 
 namespace DPF {
     namespace prg {
@@ -48,17 +49,19 @@ namespace DPF {
     inline bool ConvertBit(block in) {
         return !is_zero(in & LSBBlock);
     }
-    inline block ConvertBlock(block in) {
+    inline block ConvertBlock(block in, uint8_t tweak) {
+        in[0] ^= tweak;
         return mAesFixedKey.encryptECB(in);
     }
 
-    inline std::array<block,8> ConvertBlock8(const std::array<block,8>& in) {
+    inline std::array<block,8> ConvertBlock8(const std::array<block,8>& in, int tweak) {
         std::array<block,8> out;
-        mAesFixedKey.encryptECBBlocks(in.data(), 8, out.data());
+        mAesFixedKey.encryptECBBlocks(in.data(), 8, out.data(), tweak);
         return out;
     }
 
-    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Gen(size_t alpha, size_t logn) {
+    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Gen(size_t alpha, size_t logn,
+        const std::array<uint8_t,32>& beta) {
         assert(logn <= 63);
         assert(alpha < (1ull << logn));
         std::vector<uint8_t> ka, kb, CW;
@@ -79,7 +82,7 @@ namespace DPF {
         kb.push_back(t1);
 //        std::cout << ka.hex() << std::endl;
 //        std::cout << kb.hex() << std::endl;
-        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
+        size_t stop = logn; // pack 2 layers in final CW
         for(size_t i = 0; i < stop; i++) {
             Log::v("gen", "%d, %d", t0, t1);
             Log::v("gen", s0);
@@ -99,7 +102,7 @@ namespace DPF {
             uint8_t t1R = getT(s1R);
             s1R = clr(s1R);
 
-            if(alpha & (1ULL << (logn-1-i))) {
+            if(alpha & (1ULL << (logn-i-1))) {
                 //KEEP = R, LOSE = L
                 block scw = s0L ^ s1L;
                 uint8_t tLCW = t0L ^ t1L;
@@ -139,10 +142,16 @@ namespace DPF {
             }
 
         }
-        reg_arr_union tmp = {ZeroBlock};
-        tmp.arr[(alpha&127)/8] = (uint8_t)(1U<<((alpha&127)%8));
-        tmp.reg = tmp.reg ^ ConvertBlock(s0) ^ ConvertBlock(s1);
-        CW.insert(CW.end(), (uint8_t*)&tmp.reg, ((uint8_t*)&tmp.reg) + sizeof(tmp.reg));
+        reg_arr_union tmp0 = {ZeroBlock};
+        reg_arr_union tmp1 = {ZeroBlock};
+        // Copy first 16 bytes of beta into first block
+        memcpy(&tmp0.arr[0], &beta, 16);
+        // Copy second 16 bytes of beta into second block
+        memcpy(&tmp1.arr[0], &beta[16], 16);
+        tmp0.reg = tmp0.reg ^ ConvertBlock(s0, 0) ^ ConvertBlock(s1, 0);
+        tmp1.reg = tmp1.reg ^ ConvertBlock(s0, 1) ^ ConvertBlock(s1, 1);
+        CW.insert(CW.end(), (uint8_t*)&tmp0.reg, ((uint8_t*)&tmp0.reg) + sizeof(tmp0.reg));
+        CW.insert(CW.end(), (uint8_t*)&tmp1.reg, ((uint8_t*)&tmp1.reg) + sizeof(tmp1.reg));
         ka.insert(ka.end(), CW.begin(), CW.end());
         kb.insert(kb.end(), CW.begin(), CW.end());
 
@@ -151,16 +160,22 @@ namespace DPF {
 
 
     // optimized for vectorized ops
-    void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,8>& res) {
+    void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,4>& res) {
         if(lvl == stop) {
             std::array<reg_arr_union,8> tmp;
-            reg_arr_union CW;
-            memcpy(CW.arr, key.data() + key.size() - 16, 16);
-            std::array<block, 8> conv =  ConvertBlock8(s);
-            for (int i = 0; i < 8; i++) {
+            reg_arr_union CW0, CW1;
+            memcpy(CW0.arr, key.data() + key.size() - 32, 16);
+            memcpy(CW1.arr, key.data() + key.size() - 16, 16);
+            std::array<block, 8> conv0 =  ConvertBlock8(s, 0);
+            std::array<block, 8> conv1 =  ConvertBlock8(s, 1);
+            for (int i = 0; i < 4; i++) {
                 block tt = _mm_set1_epi8(-(t[i]));
-                tmp[i].reg = conv[i] ^ (CW.reg & tt);
-                memcpy(res[i], tmp[i].arr, 16);
+                tmp[2*i].reg = conv0[2*i] ^ (CW0.reg & tt);
+                memcpy(res[i], tmp[2*i].arr, 16);
+                res[i] += sizeof(block);
+
+                tmp[2*i+1].reg = conv1[2*i+1] ^ (CW1.reg & tt);
+                memcpy(res[i], tmp[2*i+1].arr, 16);
                 res[i] += sizeof(block);
             }
             return;
@@ -189,16 +204,17 @@ namespace DPF {
     std::vector<uint8_t> EvalFull8(const std::vector<uint8_t>& key, size_t logn) {
         assert(logn <= 63);
         std::vector<uint8_t> data;
-        data.resize(1ULL << (logn - 3));
-        std::array<uint8_t*,8> data_ptrs;
-        for(size_t i = 0; i < 8; i++) {
-            data_ptrs[i] = &data[i*(1ULL << (logn - 3 - 3))];
+        data.resize(32ULL * (1ULL << logn));
+        std::array<uint8_t*,4> data_ptrs;
+        for(size_t i = 0; i < 4; i++) {
+            data_ptrs[i] = &data[i*(1ULL << (logn - 2))];
         }
         block s;
         memcpy(&s, key.data(), 16);
         uint8_t t = key.data()[16];
-        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
-        assert(stop >= 3); // need 3 or more layers for this to make sense
+        size_t stop = logn; 
+        printf("log %llu\n", stop);
+        assert(stop >= 7); // avoid weirdness in this edge case
         // evaluate first 3 layers
         size_t lvl = 0;
         block sL = prg::getL(s);

@@ -26,7 +26,11 @@ int main(int argc, char** argv) {
             store.push_back(_mm256_set_epi64x(i, i, i, i));
         }
         auto time1 = std::chrono::high_resolution_clock::now();
-        auto keys = DPF::Gen(0, N);
+        auto beta = std::array<uint8_t,32>();
+        for (int i = 0; i < 32; i++) {
+          beta[i] = (uint8_t)i;
+        }
+        auto keys = DPF::Gen(0, N, beta);
         auto a = keys.first;
         auto b = keys.second;
         keysizeT += a.size();

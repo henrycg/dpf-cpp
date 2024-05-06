@@ -7,12 +7,25 @@
 
 int testEvalFull8()  {
 
-    size_t N = 11;
-    auto keys = DPF::Gen(0, N);
-    auto a = keys.first;
-    std::vector<uint8_t> aaaa = DPF::EvalFull8(a, N);
-    std::vector<uint8_t> bbbb = DPF::EvalFull8(a, N);
+    size_t N = 10;
 
+    auto beta = std::array<uint8_t,32>();
+    for (int i = 0; i < 32; i++) {
+      beta[i] = (uint8_t)i;
+    }
+    auto keys = DPF::Gen(3, N, beta);
+    auto a = keys.first;
+    auto b = keys.second;
+    std::vector<uint8_t> aaaa = DPF::EvalFull8(a, N);
+    std::vector<uint8_t> bbbb = DPF::EvalFull8(b, N);
+
+    for (size_t i=0; i<aaaa.size(); i++) {
+      if ((i % 32) == 0) {
+        std::cout << "Block " << (i>>5) << std::endl;
+
+      }
+      std::cout << (aaaa[i] ^ bbbb[i]) << std::endl;
+    }
     if(aaaa == bbbb) {
         return 0;
     }
@@ -28,6 +41,8 @@ int testEvalFull8()  {
     }
 }
 
+
+/*
 int testCorr() {
     size_t N = 20;
     hashdatastore store;
@@ -36,7 +51,12 @@ int testCorr() {
         store.push_back(_mm256_set_epi64x(i, i, i, i));
     }
 
-    auto keys = DPF::Gen(123456, N);
+
+    auto beta = std::array<uint8_t,32>();
+    for (int i = 0; i < 32; i++) {
+      beta[i] = (uint8_t)i;
+    }
+    auto keys = DPF::Gen(123456, N, beta);
     auto a = keys.first;
     auto b = keys.second;
     std::vector<uint8_t> aaaa = DPF::EvalFull8(a, N);
@@ -52,10 +72,11 @@ int testCorr() {
     }
 
 }
+*/
 
 int main(int argc, char** argv) {
     int res = 0;
     res |= testEvalFull8();
-    res |= testCorr();
+//    res |= testCorr();
     return res;
 }

@@ -12,7 +12,13 @@ void benchEvalFull8(size_t N, size_t iter) {
     buildT = evalT = answerT = std::chrono::duration<double>::zero();
     std::cout << "EvalFull8, " << iter << " iterations" << std::endl;
     auto time1 = std::chrono::high_resolution_clock::now();
-    auto keys = DPF::Gen(0, N);
+
+    auto beta = std::array<uint8_t,32>();
+    for (int i = 0; i < 32; i++) {
+      beta[i] = (uint8_t)i;
+    }
+
+    auto keys = DPF::Gen(0, N, beta);
     auto a = keys.first;
     auto time2 = std::chrono::high_resolution_clock::now();
     for(size_t i = 0; i < iter; i++) {
@@ -29,7 +35,12 @@ void benchEvalFull8(size_t N, size_t iter) {
 void benchAnswerPIR(size_t N, size_t iter) {
     std::array<std::chrono::duration<double>,6> answerT = {std::chrono::duration<double>::zero(), };
     std::cout << "AnswerPIR, " << iter << " iterations" << std::endl;
-    auto keys = DPF::Gen(0, N);
+
+    auto beta = std::array<uint8_t,32>();
+    for (int i = 0; i < 32; i++) {
+      beta[i] = (uint8_t)i;
+    }
+    auto keys = DPF::Gen(0, N, beta);
     auto a = keys.first;
     hashdatastore store;
     store.reserve(1ULL << N);

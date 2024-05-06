@@ -1,5 +1,6 @@
 #include "AES.h"
 #include <cassert>
+#include <cstring>
 
 
 const uint8_t fixed_key[16] = {36,156,50,234,92,230,49,9,174,170,205,160,98,236,29,243};
@@ -76,13 +77,20 @@ void AES::encryptECB_MMO(const block& plaintext, block& ciphertext) const {
     ciphertext = _mm_xor_si128(ciphertext, plaintext);
 }
 
-void AES::encryptECBBlocks(const block* plaintexts, uint64_t blockLength, block* ciphertexts) const {
+void AES::encryptECBBlocks(const block* plaintexts_in, uint64_t blockLength, block* ciphertexts, uint8_t tweak) const {
 
     const uint64_t step = 8;
     uint64_t idx = 0;
     uint64_t length = blockLength - blockLength % step;
 
     //std::array<block, step> temp;
+    block plaintexts[step];
+    std::memcpy(&plaintexts[0], &plaintexts_in[0], 16*step);
+    for(int i=0; i<(int)step; i++) {
+      plaintexts[i][0] ^= tweak;
+    }
+
+
     block temp[step];
 
     for (; idx < length; idx += step)

@@ -36,7 +36,7 @@ public:
         decryptECB(ciphertext, tmp);
         return tmp;
     }
-    void encryptECBBlocks(const block* plaintexts, uint64_t blockLength, block* ciphertexts) const;
+    void encryptECBBlocks(const block* plaintexts, uint64_t blockLength, block* ciphertexts, uint8_t tweak) const;
     void encryptECB_MMO_Blocks(const block* plaintexts, uint64_t blockLength, block* ciphertexts) const;
 
     void encryptCTR(uint64_t baseIdx, uint64_t blockLength, block * ciphertext) const;
