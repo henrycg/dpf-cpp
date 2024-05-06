@@ -82,7 +82,7 @@ namespace DPF {
         kb.push_back(t1);
 //        std::cout << ka.hex() << std::endl;
 //        std::cout << kb.hex() << std::endl;
-        size_t stop = logn; // pack 2 layers in final CW
+        size_t stop = logn; 
         for(size_t i = 0; i < stop; i++) {
             Log::v("gen", "%d, %d", t0, t1);
             Log::v("gen", s0);
@@ -160,7 +160,7 @@ namespace DPF {
 
 
     // optimized for vectorized ops
-    void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,4>& res) {
+    void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,8>& res) {
         if(lvl == stop) {
             std::array<reg_arr_union,8> tmp;
             reg_arr_union CW0, CW1;
@@ -168,14 +168,14 @@ namespace DPF {
             memcpy(CW1.arr, key.data() + key.size() - 16, 16);
             std::array<block, 8> conv0 = ConvertBlock8(s, 0);
             std::array<block, 8> conv1 = ConvertBlock8(s, 0);
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 8; i++) {
                 block tt = _mm_set1_epi8(-(t[i]));
-                tmp[2*i].reg = conv0[2*i] ^ (CW0.reg & tt);
-                memcpy(res[i], tmp[2*i].arr, 16);
+                tmp[i].reg = conv0[i] ^ (CW0.reg & tt);
+                memcpy(res[i], tmp[i].arr, 16);
                 res[i] += sizeof(block);
 
-                tmp[2*i+1].reg = conv1[2*i+1] ^ (CW1.reg & tt);
-                memcpy(res[i], tmp[2*i+1].arr, 16);
+                tmp[i].reg = conv1[i] ^ (CW1.reg & tt);
+                memcpy(res[i], tmp[i].arr, 16);
                 res[i] += sizeof(block);
             }
             return;
@@ -205,9 +205,9 @@ namespace DPF {
         assert(logn <= 63);
         std::vector<uint8_t> data;
         data.resize(32ULL * (1ULL << logn));
-        std::array<uint8_t*,4> data_ptrs;
-        for(size_t i = 0; i < 4; i++) {
-            data_ptrs[i] = &data[i* 32ULL * (1ULL << logn)/4];
+        std::array<uint8_t*,8> data_ptrs;
+        for(size_t i = 0; i < 8; i++) {
+            data_ptrs[i] = &data[i* 32ULL * (1ULL << logn)/8];
         }
         block s;
         memcpy(&s, key.data(), 16);
