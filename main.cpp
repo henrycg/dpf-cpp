@@ -4,6 +4,9 @@
 #include <chrono>
 #include <iostream>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 int main(int argc, char** argv) {
 
     if(argc != 2) {
@@ -33,7 +36,7 @@ int main(int argc, char** argv) {
         if(N > 10) {
             aaaa = DPF::EvalFull8(a, N);
         } else {
-            aaaa = DPF::EvalFull(a, N);
+            aaaa = DPF::EvalFull8(a, N);
         }
         //std::vector<uint8_t> bbbb = DPF::EvalFull(b, N);
 
@@ -56,3 +59,4 @@ int main(int argc, char** argv) {
     return 0;
 
 }
+#pragma GCC diagnostic pop

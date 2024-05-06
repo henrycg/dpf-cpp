@@ -10,7 +10,7 @@ int testEvalFull8()  {
     size_t N = 11;
     auto keys = DPF::Gen(0, N);
     auto a = keys.first;
-    std::vector<uint8_t> aaaa = DPF::EvalFull(a, N);
+    std::vector<uint8_t> aaaa = DPF::EvalFull8(a, N);
     std::vector<uint8_t> bbbb = DPF::EvalFull8(a, N);
 
     if(aaaa == bbbb) {

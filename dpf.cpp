@@ -60,7 +60,7 @@ namespace DPF {
 
     std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Gen(size_t alpha, size_t logn) {
         assert(logn <= 63);
-        assert(alpha < (1<<logn));
+        assert(alpha < (1ull << logn));
         std::vector<uint8_t> ka, kb, CW;
         PRNG p = PRNG::getTestPRNG();
         block s0, s1;
@@ -149,107 +149,6 @@ namespace DPF {
         return std::make_pair(ka, kb);
     }
 
-    bool Eval(const std::vector<uint8_t>& key, size_t x, size_t logn) {
-        assert(logn <= 63);
-        assert(x < (1<<logn));
-        block s;
-        memcpy(&s, key.data(), 16);
-        uint8_t t = key.data()[16];
-        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
-        for(size_t i = 0; i < stop; i++) {
-            Log::v("eval", s);
-            Log::v("eval", "t: %d", t);
-            block sL = prg::getL(s);
-            uint8_t tL = getT(sL);
-            sL = clr(sL);
-            block sR = prg::getR(s);
-            uint8_t tR = getT(sR);
-            sR = clr(sR);
-            if(t) {
-                block sCW;
-                memcpy(&sCW, key.data() + 17 + i*18, 16);
-                uint8_t tLCW = key.data()[17+i*18+16];
-                uint8_t tRCW = key.data()[17+i*18+17];
-                Log::v("eval", "tcw %d %d", tLCW, tRCW);
-                tL^=tLCW;
-                tR^=tRCW;
-                sL^=sCW;
-                sR^=sCW;
-            }
-            if(x & (1ULL<<(logn-1-i))) {
-                s = sR;
-                t = tR;
-            } else {
-                s = sL;
-                t = tL;
-            }
-        }
-        Log::v("evalfin", s);
-        if(t) {
-            reg_arr_union tmp;
-            reg_arr_union CW;
-            memcpy(CW.arr, key.data()+key.size()-16, 16);
-            tmp.reg = CW.reg ^ ConvertBlock(s);
-            return (tmp.arr[(x&127)/8] & (1UL << ((x&127)%8))) != 0;
-        }
-        else {
-            reg_arr_union tmp;
-            tmp.reg = ConvertBlock(s);
-            return (tmp.arr[(x&127)/8] & (1UL << ((x&127)%8))) != 0;
-        }
-    }
-
-    void EvalFullRecursive(const std::vector<uint8_t>& key, block s, uint8_t t, size_t lvl, size_t stop, std::vector<uint8_t>& res) {
-        if(lvl == stop) {
-            if(t) {
-                reg_arr_union tmp;
-                reg_arr_union CW;
-                memcpy(CW.arr, key.data()+key.size()-16, 16);
-                tmp.reg = CW.reg ^ ConvertBlock(s);
-                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
-            }
-            else {
-                reg_arr_union tmp;
-                tmp.reg = ConvertBlock(s);
-                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
-            }
-            return;
-        }
-        block sL = prg::getL(s);
-        uint8_t tL = getT(sL);
-        sL = clr(sL);
-        block sR = prg::getR(s);
-        uint8_t tR = getT(sR);
-        sR = clr(sR);
-        if(t) {
-            block sCW;
-            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
-//            block* sCW = (block*) key.data() + 17 + lvl*18;
-            uint8_t tLCW = key.data()[17+lvl*18+16];
-            uint8_t tRCW = key.data()[17+lvl*18+17];
-            tL^=tLCW;
-            tR^=tRCW;
-            sL^=sCW;
-            sR^=sCW;
-        }
-        Log::v("-sL", sL);
-        EvalFullRecursive(key, sL, tL, lvl+1, stop, res);
-        Log::v("-sR", sR);
-        EvalFullRecursive(key, sR, tR, lvl+1, stop, res);
-    }
-
-    std::vector<uint8_t> EvalFull(const std::vector<uint8_t>& key, size_t logn) {
-        assert(logn <= 63);
-        std::vector<uint8_t> data;
-	if(logn >= 7)
-		data.reserve(1ULL << (logn-3));
-        block s;
-        memcpy(&s, key.data(), 16);
-        uint8_t t = key.data()[16];
-        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
-        EvalFullRecursive(key, s, t, 0, stop, data);
-        return data;
-    }
 
     // optimized for vectorized ops
     void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,8>& res) {
@@ -424,58 +323,4 @@ namespace DPF {
         EvalFullRecursive8(key, s_array, t_array, 3, stop, data_ptrs);
         return data;
     }
-
-//    std::vector<uint8_t> EvalFullNonRec(const std::vector<uint8_t>& key, size_t logn) {
-//        assert(logn <= 63);
-//        std::vector<uint8_t> data;
-//        std::vector<block> sL_vals;
-//        std::vector<block> sR_vals;
-//        std::vector<int> tL_vals;
-//        std::vector<int> tR_vals;
-//        data.reserve(1ULL << (logn-3));
-//        block s;
-//        memcpy(&s, key.data(), 16);
-//        uint8_t t = key.data()[16];
-//        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
-//
-//        for(size_t lvl = 0; lvl < stop; lvl++) {
-//            const size_t layersize = (1 << lvl);
-//            block sCW;
-//            memcpy(&sCW, key.data() + 17 + lvl * 18, 16);
-//            uint8_t tLCW = key.data()[17 + lvl * 18 + 16];
-//            uint8_t tRCW = key.data()[17 + lvl * 18 + 17];
-//            for(int j = 0; j < layersize; j++) {
-//                block sL = prg::getL(s);
-//                uint8_t tL = getT(sL);
-//                sL = clr(sL);
-//                block sR = prg::getR(s);
-//                uint8_t tR = getT(sR);
-//                sR = clr(sR);
-//                if (t) {
-//                    Log::v("eval", "tcw %d %d", tLCW, tRCW);
-//                    tL ^= tLCW;
-//                    tR ^= tRCW;
-//                    sL ^= sCW;
-//                    sR ^= sCW;
-//                }
-//            }
-//        }
-//
-//        if(lvl == stop) {
-//            if(t) {
-//                reg_arr_union tmp;
-//                reg_arr_union CW;
-//                memcpy(CW.arr, key.data()+key.size()-16, 16);
-//                tmp.reg = CW.reg ^ ConvertBlock(s);
-//                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
-//            }
-//            else {
-//                reg_arr_union tmp;
-//                tmp.reg = ConvertBlock(s);
-//                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
-//            }
-//            return;
-//        }
-//        return data;
-//    }
 }
