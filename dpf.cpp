@@ -149,7 +149,7 @@ namespace DPF {
         // Copy second 16 bytes of beta into second block
         memcpy(&tmp1.arr[0], &beta[16], 16);
         tmp0.reg = tmp0.reg ^ ConvertBlock(s0, 0) ^ ConvertBlock(s1, 0);
-        tmp1.reg = tmp1.reg ^ ConvertBlock(s0, 1) ^ ConvertBlock(s1, 1);
+        tmp1.reg = tmp1.reg ^ ConvertBlock(s0, 0) ^ ConvertBlock(s1, 0);
         CW.insert(CW.end(), (uint8_t*)&tmp0.reg, ((uint8_t*)&tmp0.reg) + sizeof(tmp0.reg));
         CW.insert(CW.end(), (uint8_t*)&tmp1.reg, ((uint8_t*)&tmp1.reg) + sizeof(tmp1.reg));
         ka.insert(ka.end(), CW.begin(), CW.end());
@@ -166,8 +166,8 @@ namespace DPF {
             reg_arr_union CW0, CW1;
             memcpy(CW0.arr, key.data() + key.size() - 32, 16);
             memcpy(CW1.arr, key.data() + key.size() - 16, 16);
-            std::array<block, 8> conv0 =  ConvertBlock8(s, 0);
-            std::array<block, 8> conv1 =  ConvertBlock8(s, 1);
+            std::array<block, 8> conv0 = ConvertBlock8(s, 0);
+            std::array<block, 8> conv1 = ConvertBlock8(s, 0);
             for (int i = 0; i < 4; i++) {
                 block tt = _mm_set1_epi8(-(t[i]));
                 tmp[2*i].reg = conv0[2*i] ^ (CW0.reg & tt);
@@ -207,7 +207,7 @@ namespace DPF {
         data.resize(32ULL * (1ULL << logn));
         std::array<uint8_t*,4> data_ptrs;
         for(size_t i = 0; i < 4; i++) {
-            data_ptrs[i] = &data[i*(1ULL << (logn - 2))];
+            data_ptrs[i] = &data[i* 32ULL * (1ULL << logn)/4];
         }
         block s;
         memcpy(&s, key.data(), 16);

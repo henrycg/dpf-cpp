@@ -13,7 +13,7 @@ int testEvalFull8()  {
     for (int i = 0; i < 32; i++) {
       beta[i] = (uint8_t)i;
     }
-    auto keys = DPF::Gen(3, N, beta);
+    auto keys = DPF::Gen(1022, N, beta);
     auto a = keys.first;
     auto b = keys.second;
     std::vector<uint8_t> aaaa = DPF::EvalFull8(a, N);
